@@ -1,66 +1,103 @@
 'use client'
+
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
-export default function Home() {
+export default function DashboardPage() {
+  const [email, setEmail] = useState('')
   const router = useRouter()
+  const supabase = createClient()
 
-  // Función para forzar la navegación y limpiar cualquier duda del navegador
-  const navegarA = (ruta: string) => {
-    router.push(ruta);
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        router.push('/login')
+      } else {
+        setEmail(user.email || '')
+      }
+    }
+    getUser()
+  }, [])
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    router.push('/login')
   }
 
   return (
-    <main className="min-h-screen bg-[#050505] text-white font-sans relative overflow-hidden">
-      
-      {/* Fondo con overlay */}
-      <div className="absolute inset-0 z-0">
-        <div 
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-20"
-          style={{ backgroundImage: "url('https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=2000')" }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-green-900/10 via-[#050505] to-[#050505]" />
-      </div>
-
-      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen p-6 text-center">
+    <main className="min-h-screen" style={{
+      backgroundImage: 'url(https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=1600)',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+    }}>
+      <div className="min-h-screen" style={{ backgroundColor: 'rgba(22, 101, 52, 0.82)' }}>
         
-        <nav className="absolute top-0 w-full p-8 flex justify-between items-center max-w-7xl">
-          <div className="flex items-center gap-2">
-            <span className="text-xl italic font-black uppercase tracking-tighter">Arena <span className="text-green-500">Pro</span></span>
+        <nav className="px-6 py-4 flex justify-between items-center" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
+          <h1 className="text-xl font-bold text-white">⚽ Alquiler de Canchas</h1>
+          <div className="flex items-center gap-4">
+            <span className="text-green-200 text-sm">{email}</span>
+            <button
+              onClick={handleLogout}
+              className="bg-red-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-600 transition"
+            >
+              Cerrar sesión
+            </button>
           </div>
-          <button 
-            onClick={() => navegarA('/dashboard')}
-            className="text-[9px] font-black uppercase tracking-[0.3em] text-gray-500 hover:text-white transition-all"
-          >
-            Panel de Control →
-          </button>
         </nav>
 
-        <div className="max-w-2xl">
-          <h1 className="text-4xl md:text-6xl font-black italic uppercase tracking-tighter leading-tight mb-4">
-            TU PARTIDO <br /> EMPIEZA <span className="text-green-500 underline decoration-green-500/30">ACÁ</span>
-          </h1>
-          <p className="text-gray-500 font-bold uppercase tracking-[0.2em] text-[10px] mb-10">
-            Reserva directa y gestión de desafíos
-          </p>
+        <div className="container mx-auto px-4 py-8">
+          <h2 className="text-3xl font-bold text-white mb-2">Panel de Control</h2>
+          <p className="text-green-200 mb-8">Bienvenido a tu complejo deportivo</p>
 
-          <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
-            {/* BOTÓN RESERVAR: Redirige a /reservar */}
-            <button 
-              onClick={() => navegarA('/reservar')} 
-              className="w-full sm:w-auto bg-white text-black font-black px-10 py-4 rounded-xl uppercase italic text-[11px] hover:bg-green-500 transition-all active:scale-95"
-            >
-              🏟️ Reservar cancha
-            </button>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="rounded-xl p-6 border border-white/20" style={{ backgroundColor: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(10px)' }}>
+              <h3 className="text-lg font-semibold text-white">🏟️ Mi Complejo</h3>
+              <p className="text-green-200 text-sm mt-2">Configurá tu complejo deportivo</p>
+              <button
+                onClick={() => router.push('/dashboard/complejo')}
+                className="mt-4 bg-white text-green-700 px-4 py-2 rounded-lg text-sm hover:bg-green-50 transition w-full font-semibold"
+              >
+                Configurar
+              </button>
+            </div>
 
-            {/* BOTÓN DESAFÍOS: Redirige a /armar-desafio */}
-            <button 
-              onClick={() => navegarA('/armar-desafio')} 
-              className="w-full sm:w-auto bg-green-500 text-black font-black px-10 py-4 rounded-xl uppercase italic text-[11px] hover:bg-white transition-all shadow-lg shadow-green-500/10 active:scale-95"
-            >
-              ⚔️ Buscar desafíos
-            </button>
+            <div className="rounded-xl p-6 border border-white/20" style={{ backgroundColor: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(10px)' }}>
+              <h3 className="text-lg font-semibold text-white">📅 Reservas</h3>
+              <p className="text-green-200 text-sm mt-2">Gestioná las reservas</p>
+              <button
+                onClick={() => router.push('/dashboard/reservas')}
+                className="mt-4 bg-white text-green-700 px-4 py-2 rounded-lg text-sm hover:bg-green-50 transition w-full font-semibold"
+              >
+                Ver reservas
+              </button>
+            </div>
+
+            <div className="rounded-xl p-6 border border-white/20" style={{ backgroundColor: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(10px)' }}>
+              <h3 className="text-lg font-semibold text-white">⚽ Canchas</h3>
+              <p className="text-green-200 text-sm mt-2">Administrá tus canchas</p>
+              <button
+                onClick={() => router.push('/dashboard/canchas')}
+                className="mt-4 bg-white text-green-700 px-4 py-2 rounded-lg text-sm hover:bg-green-50 transition w-full font-semibold"
+              >
+                Ver canchas
+              </button>
+            </div>
+
+            <div className="rounded-xl p-6 border border-white/20" style={{ backgroundColor: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(10px)' }}>
+              <h3 className="text-lg font-semibold text-white">⚔️ Desafíos</h3>
+              <p className="text-green-200 text-sm mt-2">Gestioná los desafíos</p>
+              <button
+                onClick={() => router.push('/dashboard/desafios')}
+                className="mt-4 bg-white text-green-700 px-4 py-2 rounded-lg text-sm hover:bg-green-50 transition w-full font-semibold"
+              >
+                Ver desafíos
+              </button>
+            </div>
           </div>
         </div>
+
       </div>
     </main>
   )
