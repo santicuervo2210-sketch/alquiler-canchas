@@ -2,233 +2,169 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
 
-export default function ReservasPublicaPage() {
+export default function ReservasPage() {
+  const [reservas, setReservas] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [complejoId, setComplejoId] = useState<string | null>(null)
+  const [filtro, setFiltro] = useState('todas')
   const supabase = createClient()
+  const router = useRouter()
 
-  // --- ESTADOS ---
-  const [complejo, setComplejo] = useState<any>(null)
-  const [canchas, setCanchas] = useState<any[]>([])
-  const [canchaSel, setCanchaSel] = useState<any>(null)
-  const [fecha, setFecha] = useState('')
-  const [slots, setSlots] = useState<any[]>([])
-  const [slotSel, setSlotSel] = useState<string | null>(null)
-  const [paso, setPaso] = useState(1)
-  const [loading, setLoading] = useState(false)
-  const [reservaOk, setReservaOk] = useState(false)
-
-  // Datos del cliente
-  const [nombre, setNombre] = useState('')
-  const [telefono, setTelefono] = useState('')
-
-  // --- 1. CARGA INICIAL (Complejo y Canchas) ---
   useEffect(() => {
-    const cargarDatosIniciales = async () => {
-      // Traemos el primer complejo disponible
-      const { data: complejosData } = await supabase.from('complejos').select('*').limit(1)
-      
-      if (complejosData && complejosData.length > 0) {
-        const miComplejo = complejosData[0]
-        setComplejo(miComplejo)
-        
-        // Traemos las canchas de ese complejo
-        const { data: canchasData } = await supabase
-          .from('canchas')
-          .select('*')
-          .eq('complejo_id', miComplejo.id)
-          .eq('activa', true)
-        
-        setCanchas(canchasData || [])
-      }
-    }
-    cargarDatosIniciales()
+    cargarDatos()
   }, [])
 
-  // --- 2. GENERAR HORARIOS (SLOTS) ---
-  const cargarHorariosDisponibles = async () => {
-    if (!canchaSel || !fecha || !complejo) return
-    setLoading(true)
+  const cargarDatos = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { router.push('/login'); return }
 
-    // A. Consultar reservas ya hechas
-    const { data: ocupados } = await supabase
+    const { data: complejo } = await supabase
+      .from('complejos')
+      .select('id')
+      .eq('user_id', user.id)
+      .single()
+
+    if (!complejo) { router.push('/dashboard/complejo'); return }
+    setComplejoId(complejo.id)
+
+    const { data } = await supabase
       .from('reservas')
-      .select('hora_inicio')
-      .eq('cancha_id', canchaSel.id)
-      .eq('fecha', fecha)
-      .neq('estado', 'cancelada')
+      .select('*, canchas(nombre, tipo)')
+      .eq('complejo_id', complejo.id)
+      .order('fecha', { ascending: false })
+      .order('hora_inicio', { ascending: true })
 
-    const horasOcupadas = ocupados?.map(r => r.hora_inicio.slice(0, 5)) || []
-    
-    // B. Obtener apertura y cierre del complejo (con fallbacks por si están vacíos)
-    const aperturaStr = complejo.horario_apertura?.toString().slice(0, 5) || "08:00"
-    const cierreStr = complejo.horario_cierre?.toString().slice(0, 5) || "23:00"
-
-    const hApertura = parseInt(aperturaStr.split(':')[0])
-    const hCierre = parseInt(cierreStr.split(':')[0])
-
-    // C. Generar la lista de horas
-    const nuevosSlots = []
-    for (let h = hApertura; h < hCierre; h++) {
-      const horaStr = `${h.toString().padStart(2, '0')}:00`
-      nuevosSlots.push({
-        hora: horaStr,
-        disponible: !horasOcupadas.includes(horaStr)
-      })
-    }
-
-    setSlots(nuevosSlots)
-    setPaso(3) // Avanzar al paso de horarios
+    setReservas(data || [])
     setLoading(false)
   }
 
-  // --- 3. PROCESAR LA RESERVA ---
-  const ejecutarReserva = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-
-    // Calculamos hora de fin (asumiendo 1 hora de duración)
-    const horaFin = `${(parseInt(slotSel!.split(':')[0]) + 1).toString().padStart(2, '0')}:00`
-
-    const { error } = await supabase.from('reservas').insert({
-      complejo_id: complejo.id,
-      cancha_id: canchaSel.id,
-      fecha: fecha,
-      hora_inicio: slotSel,
-      hora_fin: horaFin,
-      cliente_nombre: nombre,
-      cliente_telefono: telefono,
-      monto_total: canchaSel.precio_hora,
-      monto_seña: canchaSel.precio_hora / 2,
-      estado: 'pendiente'
-    })
-
-    if (error) {
-      alert("Hubo un error: " + error.message)
-    } else {
-      setReservaOk(true)
-    }
-    setLoading(false)
+  const cambiarEstado = async (id: string, estado: string) => {
+    await supabase.from('reservas').update({ estado }).eq('id', id)
+    await cargarDatos()
   }
 
-  // --- INTERFAZ DE ÉXITO ---
-  if (reservaOk) return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center bg-green-50">
-      <div className="bg-white p-10 rounded-3xl shadow-xl">
-        <span className="text-6xl">✅</span>
-        <h1 className="text-2xl font-bold mt-4">¡Turno reservado!</h1>
-        <p className="text-gray-500 mt-2">En breve recibiras un mensaje para confirmar la seña.</p>
-        <button 
-          onClick={() => window.location.reload()} 
-          className="mt-8 bg-green-600 text-white px-10 py-3 rounded-full font-bold hover:bg-green-700 transition"
-        >
-          Hacer otra reserva
-        </button>
-      </div>
-    </div>
-  )
+  const reservasFiltradas = reservas.filter(r => {
+    if (filtro === 'todas') return true
+    return r.estado === filtro
+  })
 
-  // --- INTERFAZ PRINCIPAL ---
+  const estadoColor: Record<string, string> = {
+    pendiente: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+    confirmada: 'bg-green-500/20 text-green-400 border-green-500/30',
+    cancelada: 'bg-red-500/20 text-red-400 border-red-500/30',
+  }
+
+  const tipoLabel: Record<string, string> = {
+    futbol_5: '⚽ F5',
+    futbol_7: '⚽ F7',
+    futbol_11: '⚽ F11',
+    paddle: '🎾 Pádel',
+  }
+
   return (
-    <main className="max-w-md mx-auto min-h-screen p-4 pb-20">
-      <header className="py-10 text-center">
-        <h1 className="text-3xl font-black text-green-700 italic tracking-tighter uppercase">
-          {complejo?.nombre || 'CARGANDO...'}
-        </h1>
-        <div className="h-1 w-20 bg-green-500 mx-auto mt-2 rounded-full"></div>
-      </header>
+    <main className="min-h-screen bg-[#050505] text-white">
+      
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <div className="absolute top-0 left-0 w-[300px] h-[300px] bg-green-500/8 blur-[100px] rounded-full"></div>
+        <div className="absolute bottom-0 right-0 w-[250px] h-[250px] bg-blue-500/8 blur-[100px] rounded-full"></div>
+      </div>
 
-      {/* 1. SELECCIÓN DE CANCHA */}
-      <section className="mb-10">
-        <h2 className="text-xs font-black text-gray-400 uppercase mb-4 tracking-widest">1. Elegí tu cancha</h2>
-        <div className="grid gap-3">
-          {canchas.map(c => (
-            <button 
-              key={c.id}
-              onClick={() => { setCanchaSel(c); setPaso(2); }}
-              className={`p-5 rounded-2xl border-2 text-left transition-all ${canchaSel?.id === c.id ? 'border-green-500 bg-green-50 ring-4 ring-green-50' : 'border-gray-100 bg-white'}`}
+      <nav className="relative z-10 px-6 py-4 flex justify-between items-center border-b border-white/5">
+        <h1 className="text-xl font-black italic uppercase">📅 Gestión de Reservas</h1>
+        <button onClick={() => router.push('/dashboard')} className="text-gray-400 hover:text-white transition text-sm font-bold uppercase tracking-wide">
+          ← Panel
+        </button>
+      </nav>
+
+      <div className="relative z-10 container mx-auto px-4 py-8 max-w-6xl">
+        
+        <div className="mb-6">
+          <h2 className="text-2xl font-black italic uppercase text-green-500 mb-1">Reservas del Complejo</h2>
+          <p className="text-gray-400 text-sm">Gestioná y confirmá las reservas de tus clientes</p>
+        </div>
+
+        {/* Filtros */}
+        <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+          {['todas', 'pendiente', 'confirmada', 'cancelada'].map((f) => (
+            <button
+              key={f}
+              onClick={() => setFiltro(f)}
+              className={`px-4 py-2 rounded-lg text-sm font-black italic uppercase transition whitespace-nowrap ${
+                filtro === f 
+                ? 'bg-green-500 text-black' 
+                : 'bg-[#0f0f0f] border border-white/10 text-gray-400 hover:border-green-500/50'
+              }`}
             >
-              <div className="flex justify-between items-center">
-                <span className="font-bold text-gray-800 text-lg">{c.nombre}</span>
-                <span className="text-green-600 font-black">${c.precio_hora}</span>
-              </div>
-              <p className="text-xs text-gray-400 mt-1">Precio por 1 hora de juego</p>
+              {f} ({f === 'todas' ? reservas.length : reservas.filter(r => r.estado === f).length})
             </button>
           ))}
         </div>
-      </section>
 
-      {/* 2. SELECCIÓN DE FECHA */}
-      {paso >= 2 && (
-        <section className="mb-10 animate-in fade-in slide-in-from-bottom-4">
-          <h2 className="text-xs font-black text-gray-400 uppercase mb-4 tracking-widest">2. ¿Cuándo juegan?</h2>
-          <div className="flex gap-2">
-            <input 
-              type="date" 
-              className="flex-1 p-4 rounded-2xl border-2 border-gray-100 outline-none focus:border-green-500 bg-white font-bold"
-              min={new Date().toISOString().split('T')[0]}
-              onChange={(e) => setFecha(e.target.value)}
-            />
-            <button 
-              onClick={cargarHorariosDisponibles}
-              disabled={!fecha || loading}
-              className="bg-black text-white px-8 rounded-2xl font-bold active:scale-95 transition disabled:opacity-20"
-            >
-              {loading ? '...' : 'VER'}
-            </button>
+        {loading ? (
+          <div className="text-center text-gray-400 py-20">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
+            <p>Cargando reservas...</p>
           </div>
-        </section>
-      )}
+        ) : reservasFiltradas.length === 0 ? (
+          <div className="bg-[#0f0f0f] border border-white/5 rounded-2xl p-20 text-center">
+            <p className="text-6xl mb-4">📅</p>
+            <p className="text-gray-400 font-bold text-lg">No hay reservas {filtro !== 'todas' ? `"${filtro}"` : 'todavía'}</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {reservasFiltradas.map((reserva) => (
+              <div key={reserva.id} className="bg-[#0f0f0f] border border-white/10 rounded-xl p-5 hover:border-green-500/50 transition">
+                <div className="flex flex-col lg:flex-row justify-between gap-4">
+                  
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-3 flex-wrap">
+                      <h3 className="font-black text-white text-lg italic uppercase">{reserva.cliente_nombre}</h3>
+                      <span className={`text-xs px-2 py-1 rounded-lg font-black uppercase border ${estadoColor[reserva.estado]}`}>
+                        {reserva.estado}
+                      </span>
+                      {reserva.es_desafio && (
+                        <span className="text-xs px-2 py-1 rounded-lg font-black uppercase bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                          ⚔️ Desafío
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="space-y-1 text-sm text-gray-400">
+                      <p className="font-bold">📞 {reserva.cliente_telefono}</p>
+                      <p>🏟️ <span className="text-white font-bold">{reserva.canchas?.nombre}</span> ({tipoLabel[reserva.canchas?.tipo]})</p>
+                      <p>📅 <span className="text-white font-bold">{reserva.fecha}</span> · ⏰ {reserva.hora_inicio.slice(0,5)} - {reserva.hora_fin.slice(0,5)}</p>
+                      <p className="text-green-400 font-black text-base mt-2">
+                        💰 Seña: ${reserva.monto_seña.toLocaleString()} · Total: ${reserva.monto_total.toLocaleString()}
+                      </p>
+                      <p className="text-xs text-gray-500">💳 {reserva.metodo_pago}</p>
+                    </div>
+                  </div>
 
-      {/* 3. SELECCIÓN DE HORARIO */}
-      {paso >= 3 && (
-        <section className="mb-10 animate-in fade-in slide-in-from-bottom-4">
-          <h2 className="text-xs font-black text-gray-400 uppercase mb-4 tracking-widest">3. Horarios disponibles</h2>
-          <div className="grid grid-cols-3 gap-2">
-            {slots.map(s => (
-              <button 
-                key={s.hora}
-                disabled={!s.disponible}
-                onClick={() => { setSlotSel(s.hora); setPaso(4); }}
-                className={`p-4 rounded-xl text-sm font-black border-2 transition-all ${
-                  !s.disponible 
-                  ? 'bg-gray-50 text-gray-200 border-gray-50 line-through' 
-                  : slotSel === s.hora 
-                    ? 'bg-green-600 text-white border-green-600 shadow-lg shadow-green-200' 
-                    : 'bg-white border-gray-100 text-gray-700 hover:border-green-200'
-                }`}
-              >
-                {s.hora}
-              </button>
+                  {/* Acciones */}
+                  {reserva.estado === 'pendiente' && (
+                    <div className="flex flex-col gap-2 lg:w-40">
+                      <button
+                        onClick={() => cambiarEstado(reserva.id, 'confirmada')}
+                        className="bg-green-500 text-black px-4 py-2.5 rounded-lg text-sm hover:bg-green-400 transition font-black italic uppercase"
+                      >
+                        ✅ Confirmar
+                      </button>
+                      <button
+                        onClick={() => cambiarEstado(reserva.id, 'cancelada')}
+                        className="bg-red-500/20 text-red-400 border border-red-500/30 px-4 py-2.5 rounded-lg text-sm hover:bg-red-500/30 transition font-black italic uppercase"
+                      >
+                        ❌ Cancelar
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             ))}
           </div>
-        </section>
-      )}
-
-      {/* 4. FORMULARIO FINAL */}
-      {paso >= 4 && (
-        <form onSubmit={ejecutarReserva} className="space-y-4 animate-in fade-in slide-in-from-bottom-4 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-          <h2 className="text-xs font-black text-gray-400 uppercase mb-2 tracking-widest">4. Confirmá tus datos</h2>
-          <input 
-            type="text" placeholder="Tu nombre completo" required 
-            className="w-full p-4 rounded-xl bg-gray-50 border-transparent border-2 focus:border-green-500 focus:bg-white outline-none transition-all"
-            onChange={e => setNombre(e.target.value)}
-          />
-          <input 
-            type="tel" placeholder="WhatsApp (sin 0 ni 15)" required 
-            className="w-full p-4 rounded-xl bg-gray-50 border-transparent border-2 focus:border-green-500 focus:bg-white outline-none transition-all"
-            onChange={e => setTelefono(e.target.value)}
-          />
-          <button 
-            disabled={loading}
-            className="w-full bg-green-600 text-white py-5 rounded-2xl font-black text-xl shadow-xl shadow-green-200 hover:bg-green-700 active:scale-95 transition-all"
-          >
-            {loading ? 'RESERVANDO...' : 'RESERVAR AHORA'}
-          </button>
-          <p className="text-[10px] text-center text-gray-400 px-4">
-            Al reservar, te comprometes a abonar la seña correspondiente para validar el turno.
-          </p>
-        </form>
-      )}
+        )}
+      </div>
     </main>
   )
 }
