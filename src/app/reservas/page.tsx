@@ -27,67 +27,44 @@ export default function ReservasPublicaPage() {
   }, [])
 
   const cargarComplejos = async () => {
-    console.log('🔵 Cargando complejos...')
-    const { data, error } = await supabase.from('complejos').select('*')
-    console.log('🔵 Complejos cargados:', data, error)
+    const { data } = await supabase.from('complejos').select('*')
     setComplejos(data || [])
     if (data && data.length === 1) {
-      console.log('🔵 Auto-seleccionando complejo:', data[0])
       setComplejoSeleccionado(data[0])
       cargarCanchas(data[0].id)
     }
   }
 
   const cargarCanchas = async (complejoId: string) => {
-    console.log('🟢 Cargando canchas para complejo:', complejoId)
     const { data } = await supabase
       .from('canchas')
       .select('*')
       .eq('complejo_id', complejoId)
       .eq('activa', true)
-    console.log('🟢 Canchas cargadas:', data)
     setCanchas(data || [])
   }
 
   const cargarSlots = async () => {
-    console.log('🟡 === INICIANDO CARGA DE SLOTS ===')
-    console.log('🟡 Datos:', { 
-      canchaSeleccionada: canchaSeleccionada?.id, 
-      fecha, 
-      complejoSeleccionado: complejoSeleccionado?.id 
-    })
-
     if (!canchaSeleccionada || !fecha || !complejoSeleccionado) {
-      console.error('❌ Faltan datos')
-      alert('Error: Falta información. Recargá la página e intentá de nuevo.')
+      alert('Por favor seleccioná cancha y fecha')
       return
     }
 
     const apertura = complejoSeleccionado.horario_apertura?.toString().slice(0, 5) || '08:00'
     const cierre = complejoSeleccionado.horario_cierre?.toString().slice(0, 5) || '23:00'
 
-    console.log('🟡 Horarios:', { apertura, cierre })
-
-    const { data: reservasExistentes, error } = await supabase
+    const { data: reservasExistentes } = await supabase
       .from('reservas')
       .select('hora_inicio')
       .eq('cancha_id', canchaSeleccionada.id)
       .eq('fecha', fecha)
       .neq('estado', 'cancelada')
 
-    if (error) {
-      console.error('❌ Error cargando reservas:', error)
-    }
-
-    console.log('🟡 Reservas existentes:', reservasExistentes)
-
     const ocupados = reservasExistentes?.map(r => r.hora_inicio.slice(0, 5)) || []
 
     const slotsGenerados = []
     let hora = parseInt(apertura.split(':')[0])
     const horaFin = parseInt(cierre.split(':')[0])
-
-    console.log('🟡 Generando slots desde', hora, 'hasta', horaFin)
 
     while (hora < horaFin) {
       const horaStr = `${hora.toString().padStart(2, '0')}:00`
@@ -99,8 +76,6 @@ export default function ReservasPublicaPage() {
       })
       hora++
     }
-
-    console.log('🟡 Slots generados:', slotsGenerados.length, 'slots')
 
     setSlots(slotsGenerados)
     setPaso(3)
@@ -131,7 +106,6 @@ export default function ReservasPublicaPage() {
     })
 
     if (error) {
-      console.error('Error creando reserva:', error)
       alert('Error al crear la reserva')
       setLoading(false)
       return
@@ -150,15 +124,15 @@ export default function ReservasPublicaPage() {
 
   if (reservaExitosa) {
     return (
-      <main className="min-h-screen bg-gradient-to-b from-green-50 to-white flex items-center justify-center">
-        <div className="bg-white rounded-2xl shadow-md p-10 text-center max-w-md w-full">
+      <main className="min-h-screen bg-[#050505] text-white flex items-center justify-center p-4">
+        <div className="bg-[#111] border-2 border-green-500 rounded-2xl p-10 text-center max-w-md w-full">
           <p className="text-6xl mb-4">🎉</p>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">¡Reserva enviada!</h2>
-          <p className="text-gray-500 mb-4">Te vamos a contactar para confirmar el pago de la seña.</p>
+          <h2 className="text-2xl font-black italic uppercase text-green-500 mb-2">¡Reserva Confirmada!</h2>
+          <p className="text-gray-400 mb-4">Te contactaremos para confirmar el pago de la seña.</p>
           {form.metodo_pago === 'transferencia' && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-left mb-4">
-              <p className="text-green-700 font-medium text-sm">📱 Para confirmar tu reserva:</p>
-              <p className="text-green-600 text-sm mt-1">Transferí la seña de <strong>${(canchaSeleccionada.precio_hora / 2).toLocaleString()}</strong> y enviá el comprobante por WhatsApp al complejo.</p>
+            <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 text-left mb-4">
+              <p className="text-green-400 font-bold text-sm">📱 Próximo paso:</p>
+              <p className="text-green-300 text-sm mt-1">Transferí la seña de <strong>${(canchaSeleccionada.precio_hora / 2).toLocaleString()}</strong> y enviá el comprobante por WhatsApp.</p>
             </div>
           )}
           <button
@@ -168,9 +142,9 @@ export default function ReservasPublicaPage() {
               setSlotSeleccionado(null);
               setForm({ nombre: '', telefono: '', email: '', metodo_pago: 'transferencia' });
             }}
-            className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition w-full"
+            className="bg-white text-black px-6 py-3 rounded-lg hover:bg-green-500 transition w-full font-black uppercase italic text-sm"
           >
-            Hacer otra reserva
+            Nueva Reserva
           </button>
         </div>
       </main>
@@ -178,34 +152,42 @@ export default function ReservasPublicaPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-green-50 to-white">
-      <nav className="bg-white shadow-sm px-6 py-4 flex justify-between items-center">
-        <h1 className="text-xl font-bold text-green-700">⚽ Reservá tu cancha</h1>
-        <a href="/" className="text-green-600 hover:underline text-sm">← Volver al inicio</a>
+    <main className="min-h-screen bg-[#050505] text-white font-sans">
+      
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <div className="absolute top-0 left-0 w-[300px] h-[300px] bg-green-500/8 blur-[100px] rounded-full"></div>
+        <div className="absolute bottom-0 right-0 w-[250px] h-[250px] bg-blue-500/8 blur-[100px] rounded-full"></div>
+      </div>
+
+      <nav className="relative z-10 px-6 py-4 flex justify-between items-center border-b border-white/5">
+        <h1 className="text-xl font-black italic uppercase text-white">⚽ Reservar Cancha</h1>
+        <a href="/" className="text-gray-400 hover:text-white transition text-sm font-bold uppercase tracking-wide">← Inicio</a>
       </nav>
 
-      <div className="container mx-auto px-4 py-8 max-w-2xl">
+      <div className="relative z-10 container mx-auto px-4 py-8 max-w-3xl">
 
         {/* Paso 1 - Elegir cancha */}
         <div className="mb-6">
-          <h2 className="text-lg font-bold text-gray-700 mb-3">1️⃣ Elegí una cancha</h2>
+          <h2 className="text-lg font-black uppercase text-green-500 mb-3 tracking-wide">1️⃣ Elegí tu cancha</h2>
           {canchas.length === 0 ? (
-            <p className="text-red-500">⚠️ No hay canchas disponibles.</p>
+            <div className="bg-[#0f0f0f] border border-white/5 rounded-xl p-8 text-center">
+              <p className="text-gray-400">⚠️ No hay canchas disponibles</p>
+            </div>
           ) : (
             <div className="grid grid-cols-1 gap-3">
               {canchas.map((cancha) => (
                 <button
                   key={cancha.id}
-                  onClick={() => { 
-                    console.log('🟢 Cancha seleccionada:', cancha)
-                    setCanchaSeleccionada(cancha); 
-                    setPaso(2) 
-                  }}
-                  className={`p-4 rounded-xl border-2 text-left transition ${canchaSeleccionada?.id === cancha.id ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-white hover:border-green-300'}`}
+                  onClick={() => { setCanchaSeleccionada(cancha); setPaso(2) }}
+                  className={`p-5 rounded-xl border-2 text-left transition ${
+                    canchaSeleccionada?.id === cancha.id 
+                    ? 'border-green-500 bg-green-500/10' 
+                    : 'border-white/10 bg-[#0f0f0f] hover:border-green-500/50'
+                  }`}
                 >
-                  <p className="font-semibold text-gray-800">{cancha.nombre}</p>
-                  <p className="text-sm text-gray-500">{tipoLabel[cancha.tipo]}</p>
-                  <p className="text-sm text-green-600 font-medium">${cancha.precio_hora.toLocaleString()}/hora · Seña: ${(cancha.precio_hora / 2).toLocaleString()}</p>
+                  <p className="font-black text-white text-lg italic uppercase">{cancha.nombre}</p>
+                  <p className="text-sm text-gray-400 font-bold mt-1">{tipoLabel[cancha.tipo]}</p>
+                  <p className="text-sm text-green-400 font-black mt-2">${cancha.precio_hora.toLocaleString()}/hora · Seña: ${(cancha.precio_hora / 2).toLocaleString()}</p>
                 </button>
               ))}
             </div>
@@ -215,27 +197,21 @@ export default function ReservasPublicaPage() {
         {/* Paso 2 - Elegir fecha */}
         {paso >= 2 && (
           <div className="mb-6">
-            <h2 className="text-lg font-bold text-gray-700 mb-3">2️⃣ Elegí una fecha</h2>
+            <h2 className="text-lg font-black uppercase text-green-500 mb-3 tracking-wide">2️⃣ Elegí la fecha</h2>
             <div className="flex gap-3">
               <input
                 type="date"
                 value={fecha}
                 min={new Date().toISOString().split('T')[0]}
-                onChange={(e) => {
-                  console.log('📅 Fecha seleccionada:', e.target.value)
-                  setFecha(e.target.value)
-                }}
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                onChange={(e) => setFecha(e.target.value)}
+                className="flex-1 bg-[#0f0f0f] border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-green-500 transition"
               />
               <button
-                onClick={() => {
-                  console.log('🔘 Botón Ver horarios clickeado')
-                  cargarSlots()
-                }}
+                onClick={cargarSlots}
                 disabled={!fecha}
-                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition disabled:opacity-50"
+                className="bg-green-500 text-black px-6 py-3 rounded-lg hover:bg-green-400 transition disabled:opacity-50 font-black uppercase italic text-sm whitespace-nowrap"
               >
-                Ver horarios
+                Ver Horarios
               </button>
             </div>
           </div>
@@ -244,9 +220,9 @@ export default function ReservasPublicaPage() {
         {/* Paso 3 - Elegir horario */}
         {paso >= 3 && (
           <div className="mb-6">
-            <h2 className="text-lg font-bold text-gray-700 mb-3">3️⃣ Elegí un horario</h2>
+            <h2 className="text-lg font-black uppercase text-green-500 mb-3 tracking-wide">3️⃣ Elegí el horario</h2>
             {slots.length === 0 ? (
-              <p className="text-red-500">⚠️ No se generaron horarios.</p>
+              <p className="text-red-400">⚠️ No hay horarios disponibles</p>
             ) : (
               <div className="grid grid-cols-3 gap-2">
                 {slots.map((slot) => (
@@ -254,14 +230,14 @@ export default function ReservasPublicaPage() {
                     key={slot.hora_inicio}
                     disabled={!slot.disponible}
                     onClick={() => { setSlotSeleccionado(slot.hora_inicio); setPaso(4) }}
-                    className={`py-2 rounded-lg text-sm font-medium transition ${
-                      !slot.disponible ? 'bg-gray-100 text-gray-400 cursor-not-allowed' :
-                      slotSeleccionado === slot.hora_inicio ? 'bg-green-600 text-white' :
-                      'bg-white border border-gray-200 text-gray-700 hover:border-green-400'
+                    className={`py-3 rounded-lg text-sm font-black italic transition ${
+                      !slot.disponible ? 'bg-[#0a0a0a] text-gray-600 cursor-not-allowed border border-white/5' :
+                      slotSeleccionado === slot.hora_inicio ? 'bg-green-500 text-black' :
+                      'bg-[#0f0f0f] border border-white/10 text-white hover:border-green-500'
                     }`}
                   >
                     {slot.hora_inicio}
-                    {!slot.disponible && <span className="block text-xs">Ocupado</span>}
+                    {!slot.disponible && <span className="block text-xs font-normal">Ocupado</span>}
                   </button>
                 ))}
               </div>
@@ -272,67 +248,67 @@ export default function ReservasPublicaPage() {
         {/* Paso 4 - Datos del cliente */}
         {paso >= 4 && slotSeleccionado && (
           <div className="mb-6">
-            <h2 className="text-lg font-bold text-gray-700 mb-3">4️⃣ Tus datos</h2>
-            <form onSubmit={handleReservar} className="bg-white rounded-xl shadow-sm p-6 space-y-4">
+            <h2 className="text-lg font-black uppercase text-green-500 mb-3 tracking-wide">4️⃣ Tus datos</h2>
+            <form onSubmit={handleReservar} className="bg-[#0f0f0f] border border-white/10 rounded-xl p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre y apellido</label>
+                <label className="block text-sm font-bold text-gray-400 uppercase mb-1 tracking-wide">Nombre y apellido</label>
                 <input
                   type="text"
                   value={form.nombre}
                   onChange={(e) => setForm({ ...form, nombre: e.target.value })}
                   required
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-green-500 transition"
                   placeholder="Juan García"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp</label>
+                <label className="block text-sm font-bold text-gray-400 uppercase mb-1 tracking-wide">WhatsApp</label>
                 <input
                   type="text"
                   value={form.telefono}
                   onChange={(e) => setForm({ ...form, telefono: e.target.value })}
                   required
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-green-500 transition"
                   placeholder="1123456789"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email (opcional)</label>
+                <label className="block text-sm font-bold text-gray-400 uppercase mb-1 tracking-wide">Email (opcional)</label>
                 <input
                   type="email"
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-green-500 transition"
                   placeholder="tu@email.com"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Método de pago de la seña</label>
+                <label className="block text-sm font-bold text-gray-400 uppercase mb-1 tracking-wide">Método de pago</label>
                 <select
                   value={form.metodo_pago}
                   onChange={(e) => setForm({ ...form, metodo_pago: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-green-500 transition"
                 >
-                  <option value="transferencia">💸 Transferencia bancaria</option>
-                  <option value="efectivo">💵 Efectivo en el complejo</option>
+                  <option value="transferencia">💸 Transferencia</option>
+                  <option value="efectivo">💵 Efectivo</option>
                 </select>
               </div>
 
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <p className="text-green-700 font-medium text-sm">📋 Resumen:</p>
-                <p className="text-green-600 text-sm mt-1">🏟️ {canchaSeleccionada?.nombre} · {tipoLabel[canchaSeleccionada?.tipo]}</p>
-                <p className="text-green-600 text-sm">📅 {fecha} · ⏰ {slotSeleccionado} - {slots.find(s => s.hora_inicio === slotSeleccionado)?.hora_fin}</p>
-                <p className="text-green-700 font-semibold text-sm mt-1">
-                  💰 Seña a pagar: ${(canchaSeleccionada?.precio_hora / 2).toLocaleString()}
+              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+                <p className="text-green-400 font-bold text-sm uppercase tracking-wide">📋 Resumen:</p>
+                <p className="text-white text-sm mt-2">🏟️ {canchaSeleccionada?.nombre} · {tipoLabel[canchaSeleccionada?.tipo]}</p>
+                <p className="text-white text-sm">📅 {fecha} · ⏰ {slotSeleccionado} - {slots.find(s => s.hora_inicio === slotSeleccionado)?.hora_fin}</p>
+                <p className="text-green-400 font-black text-lg mt-2">
+                  💰 Seña: ${(canchaSeleccionada?.precio_hora / 2).toLocaleString()}
                 </p>
               </div>
 
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition disabled:opacity-50 font-medium"
+                className="w-full bg-green-500 text-black py-3 rounded-lg hover:bg-green-400 transition disabled:opacity-50 font-black uppercase italic"
               >
-                {loading ? 'Enviando...' : '✅ Confirmar reserva'}
+                {loading ? '⏳ Enviando...' : '✅ Confirmar Reserva'}
               </button>
             </form>
           </div>
