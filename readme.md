@@ -1,8 +1,8 @@
-# 🏟️ Alquiler de Canchas - SaaS
+#  Alquiler de Canchas - SaaS
 
 Sistema multi-tenant de reservas deportivas con matchmaking.
 
-## 🚀 Deployment
+##  Deployment
 
 Este proyecto está configurado para desplegar en Vercel.
 
@@ -10,7 +10,7 @@ Este proyecto está configurado para desplegar en Vercel.
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
-## 💻 Desarrollo Local
+##  Desarrollo Local
 ```bash
 npm install
 npm run dev
